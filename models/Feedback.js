@@ -40,6 +40,10 @@ const feedbackSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  viewedByAdmin: {
+    type: Boolean,
+    default: false,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Feedback', feedbackSchema);

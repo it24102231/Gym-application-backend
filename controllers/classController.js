@@ -38,12 +38,22 @@ exports.getClasses = async (req, res) => {
   }
 };
 
-// @desc    Get trainer's specific classes
-// @route   GET /api/classes/trainer/:trainerId
-// @access  Private (Trainer)
+// @desc    Get trainer's classes — accepts either Trainer doc _id OR User _id
+// @route   GET /api/classes/trainer/:id
+// @access  Private (Trainer/Admin)
 exports.getTrainerClasses = async (req, res) => {
   try {
-    const classes = await Class.find({ trainerId: req.params.trainerId }).populate('members', 'name email');
+    // First try direct match (Trainer doc _id)
+    let classes = await Class.find({ trainerId: req.params.trainerId }).populate('members', 'name email');
+
+    // If nothing found, try looking up the Trainer by userId (User _id)
+    if (classes.length === 0) {
+      const trainerDoc = await Trainer.findOne({ userId: req.params.trainerId });
+      if (trainerDoc) {
+        classes = await Class.find({ trainerId: trainerDoc._id }).populate('members', 'name email');
+      }
+    }
+
     res.json(classes);
   } catch (error) {
     res.status(500).json({ message: error.message });

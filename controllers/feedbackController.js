@@ -1,5 +1,4 @@
 const Feedback = require('../models/Feedback');
-const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 
@@ -11,8 +10,10 @@ exports.createFeedback = async (req, res) => {
   try {
     const { type, trainerId, rating, message } = req.body;
     const imageUrl = req.file ? buildFileUrl(req, req.file.path) : null;
+    const count = await Feedback.countDocuments();
+    const feedbackId = `FBK${String(count + 1).padStart(3, '0')}`;
     const feedback = await Feedback.create({
-      feedbackId: 'FBK-' + uuidv4().slice(0, 8).toUpperCase(),
+      feedbackId,
       memberId: req.user._id,
       type, trainerId: trainerId || undefined, rating: Number(rating), message, imageUrl,
     });
@@ -25,7 +26,9 @@ exports.createFeedback = async (req, res) => {
 // @desc  Get my feedback (member)
 exports.getMyFeedback = async (req, res) => {
   try {
-    const feedback = await Feedback.find({ memberId: req.user._id }).sort({ createdAt: -1 });
+    const feedback = await Feedback.find({ memberId: req.user._id })
+      .populate('trainerId', 'name')
+      .sort({ createdAt: -1 });
     res.json(feedback);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -35,7 +38,10 @@ exports.getMyFeedback = async (req, res) => {
 // @desc  Get all feedback (admin)
 exports.getAllFeedback = async (req, res) => {
   try {
-    const feedback = await Feedback.find().populate('memberId', 'name email').populate('trainerId', 'name').sort({ createdAt: -1 });
+    const feedback = await Feedback.find()
+      .populate('memberId', 'name email')
+      .populate('trainerId', 'name')
+      .sort({ createdAt: -1 });
     res.json(feedback);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -45,7 +51,6 @@ exports.getAllFeedback = async (req, res) => {
 // @desc  Get public gym feedback for landing page
 exports.getPublicFeedback = async (req, res) => {
   try {
-    // Only return highly rated gym feedback for the landing page showcase
     const feedback = await Feedback.find({ type: 'Gym', rating: { $gte: 4 } })
       .populate('memberId', 'name')
       .sort({ createdAt: -1 })
@@ -68,30 +73,60 @@ exports.getTrainerFeedback = async (req, res) => {
   }
 };
 
-// @desc  Update feedback status (admin)
-exports.updateFeedbackStatus = async (req, res) => {
+// @desc  Update feedback (member — only if not viewed by admin)
+// @route PUT /api/feedback/:id
+exports.updateFeedback = async (req, res) => {
   try {
-    const feedback = await Feedback.findByIdAndUpdate(
-      req.params.id, { status: req.body.status }, { new: true }
-    );
+    const feedback = await Feedback.findOne({ _id: req.params.id, memberId: req.user._id });
     if (!feedback) return res.status(404).json({ message: 'Feedback not found' });
+    if (feedback.viewedByAdmin) return res.status(403).json({ message: 'This feedback has been reviewed by admin and can no longer be edited' });
+
+    const { rating, message } = req.body;
+    if (rating) feedback.rating = Number(rating);
+    if (message) feedback.message = message;
+    if (req.file) {
+      if (feedback.imageUrl) {
+        const oldPath = feedback.imageUrl.split('/uploads/')[1];
+        if (oldPath) fs.unlink(path.join('uploads', oldPath), () => {});
+      }
+      feedback.imageUrl = buildFileUrl(req, req.file.path);
+    }
+    await feedback.save();
     res.json(feedback);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 };
 
-// @desc  Delete feedback (member)
+// @desc  Delete feedback (member — only if not viewed by admin)
+// @route DELETE /api/feedback/:id
 exports.deleteFeedback = async (req, res) => {
   try {
-    const feedback = await Feedback.findById(req.params.id);
+    const feedback = await Feedback.findOne({ _id: req.params.id, memberId: req.user._id });
     if (!feedback) return res.status(404).json({ message: 'Feedback not found' });
+    if (feedback.viewedByAdmin) return res.status(403).json({ message: 'This feedback has been reviewed by admin and can no longer be deleted' });
     if (feedback.imageUrl) {
       const oldPath = feedback.imageUrl.split('/uploads/')[1];
       if (oldPath) fs.unlink(path.join('uploads', oldPath), () => {});
     }
     await feedback.deleteOne();
     res.json({ message: 'Feedback deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// @desc  Admin views a feedback → marks as viewed (locks member edit/delete)
+// @route PATCH /api/feedback/:id/view
+exports.markViewed = async (req, res) => {
+  try {
+    const feedback = await Feedback.findByIdAndUpdate(
+      req.params.id,
+      { viewedByAdmin: true, status: 'Reviewed' },
+      { new: true }
+    );
+    if (!feedback) return res.status(404).json({ message: 'Feedback not found' });
+    res.json(feedback);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

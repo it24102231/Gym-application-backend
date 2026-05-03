@@ -17,7 +17,11 @@ exports.getMyProfile = async (req, res) => {
     // If trainer, merge trainer-specific data
     if (user.role === 'Trainer') {
       const trainerData = await Trainer.findOne({ userId: user._id });
-      if (trainerData) profile = { ...profile, ...trainerData.toObject() };
+      if (trainerData) {
+        const trainerObj = trainerData.toObject();
+        // Preserve User _id but also expose Trainer doc _id separately
+        profile = { ...profile, ...trainerObj, _id: user._id, trainerDocId: trainerObj._id };
+      }
     }
     res.json(profile);
   } catch (err) {
