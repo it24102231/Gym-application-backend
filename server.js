@@ -9,9 +9,16 @@ const app = express();
 // Connect to Database
 connectDB();
 
-// Middleware
-app.use(cors());
+// ── CORS — allow all origins (required for Expo/mobile + Railway) ──
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder'],
+}));
+app.options('*', cors()); // Pre-flight for all routes
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Base Route
