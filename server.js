@@ -16,7 +16,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder'],
 }));
-app.options('*', cors()); // Pre-flight for all routes
+app.options('/(.*)', cors()); // Pre-flight for all routes (Express 5 compatible)
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
