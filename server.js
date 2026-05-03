@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 
 const app = express();
@@ -23,7 +24,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Base Route
 app.get('/', (req, res) => {
-  res.send('Gym Management API is running...');
+  res.json({ status: 'ok', message: 'Gym Management API is running', db: mongoose.connection.readyState === 1 ? 'connected' : 'connecting' });
+});
+
+// Health check for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
 // Import Routes
